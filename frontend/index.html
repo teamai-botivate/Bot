@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Botivate AI</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+    <!-- Markdown renderer + sanitiser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+
+    <!-- App stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css?v=3" />
+</head>
+<body>
+
+    <div id="chat-container">
+
+        <header>
+            <div class="logo-wrap">
+                <img src="/static/B%20PNG%20(1).png" alt="Botivate logo" class="brand-logo" />
+            </div>
+            <div class="header-text">
+                <h1>Botivate AI</h1>
+                <div class="status">
+                    <span class="status-dot"></span>
+                    <span>Online</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="message-list">
+            <!-- Initial bot greeting bubble -->
+            <div class="message bot">
+                <div class="avatar bot-avatar">
+                    <img src="/static/B%20PNG%20(1).png" alt="Botivate logo" />
+                </div>
+                <div class="message-content" id="initial-greeting">
+                    <!-- Filled by app.js at runtime -->
+                </div>
+            </div>
+        </div>
+
+        <div id="input-area">
+            <textarea id="message-input" placeholder="Type your message…" rows="1"></textarea>
+            <button id="send-button" disabled>
+                <span class="material-symbols-outlined">arrow_upward</span>
+            </button>
+        </div>
+
+        <footer class="app-footer">
+            Powered by <a href="https://botivate.in" target="_blank" rel="noopener">Botivate</a>
+        </footer>
+
+    </div>
+
+    <!-- JS: load order matters – config → ui → api → app -->
+    <script src="/static/js/config.js?v=3"></script>
+    <script src="/static/js/ui.js?v=3"></script>
+    <script src="/static/js/api.js?v=3"></script>
+    <script src="/static/js/app.js?v=3"></script>
+
+</body>
+</html>
