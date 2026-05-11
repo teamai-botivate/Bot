@@ -3,8 +3,13 @@ LangGraph node functions.
 Each function receives AgentState and returns a partial state update dict.
 """
 
+import hashlib
 import json
+import ast
+import re
+import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -18,6 +23,7 @@ except ImportError:
 from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
 
 from .state import AgentState, DatabaseQuery, Conversation, TaskCreation
+from .memory import load_memory, save_memory, now_iso
 from .tools import get_current_datetime, get_datetime_from_query
 from ..core.config import settings
 
@@ -46,14 +52,367 @@ def _send_status(msg: str) -> None:
 _llm = None
 _db = None
 _execute_query_tool = None
+_intent_llm = None
+_summary_llm = None
+_sql_llm = None
+
+# Schema cache — populated once at startup, never re-fetched
+_schema_full_cache: str = ""
+_schema_per_table: dict = {}
+
+# SQL query cache — normalized question → generated SQL (in-memory, cleared on restart)
+_sql_query_cache: dict = {}
+
+# Table sets for keyword-based routing
+_TASK_TABLES = {"Delegation", "Checklist"}
+_PO_TABLES = {"PO Pending", "Purchase Intransit", "Purchase Receipt"}
+_SALES_TABLES = {"Orders Pending", "Sales Invoices"}
+_PROD_TABLES = {"Production Orders", "Job Card Production"}
+_STOCK_TABLES = {"FG Stock", "RM Stock", "Store OUT", "Store IN"}
+_FINANCE_TABLES = {"Collection Pending", "Payments"}
+_EMP_TABLES = {"Employee Details"}
+_ENQ_TABLES = {"Enquirys"}
 
 
 def build_nodes(llm, db):
     """Inject shared resources before the graph is compiled."""
-    global _llm, _db, _execute_query_tool
+    global _llm, _db, _execute_query_tool, _schema_full_cache, _schema_per_table, _sql_query_cache
     _llm = llm
     _db = db
     _execute_query_tool = QuerySQLDataBaseTool(db=db)
+    # Cache full schema once so every request avoids a DB roundtrip
+    _schema_full_cache = db.get_table_info()
+    for tname in db.get_usable_table_names():
+        try:
+            _schema_per_table[tname] = db.get_table_info(table_names=[tname])
+        except Exception:
+            pass
+    # Restore persisted SQL cache — only load entries that are dicts (new format).
+    # Old plain-string entries are silently dropped (they have no sig, so they'd miss anyway).
+    for k, v in load_memory().get("sql_cache", {}).items():
+        if isinstance(v, dict) and "sql" in v and "sig" in v:
+            _sql_query_cache[k] = v
+
+
+def set_aux_llms(intent_llm=None, summary_llm=None, sql_llm=None):
+    """Inject optional fast/specialised LLMs."""
+    global _intent_llm, _summary_llm, _sql_llm
+    _intent_llm = intent_llm
+    _summary_llm = summary_llm
+    _sql_llm = sql_llm
+
+
+def _get_relevant_tables(question: str) -> list:
+    """Return only the tables relevant to this question to keep the SQL prompt small."""
+    q = _normalize_text(question)
+    tables: set = set()
+
+    if any(k in q for k in ("task", "kaam", "delegation", "checklist", "assigned", "doer")):
+        if "delegation" in q:
+            tables.add("Delegation")
+        elif "checklist" in q:
+            tables.add("Checklist")
+        else:
+            tables.update(_TASK_TABLES)
+
+    if re.search(r'\bpo\b', q) or any(k in q for k in ("purchase order", "indent", "vendor", "purchase")):
+        tables.update(_PO_TABLES)
+
+    if any(k in q for k in ("sales", "invoice", "delivery", "revenue")):
+        tables.update(_SALES_TABLES)
+    if re.search(r'\border\b', q):
+        tables.update(_SALES_TABLES)
+
+    if any(k in q for k in ("production", "job card", "manufacture")):
+        tables.update(_PROD_TABLES)
+
+    if any(k in q for k in ("stock", "inventory", "store")):
+        tables.update(_STOCK_TABLES)
+    if re.search(r'\bfg\b', q):
+        tables.add("FG Stock")
+    if re.search(r'\brm\b', q):
+        tables.add("RM Stock")
+
+    if "collection" in q:
+        tables.add("Collection Pending")
+    if "payment" in q:
+        tables.add("Payments")
+
+    if any(k in q for k in ("employee", "staff", "salary", "payroll")):
+        tables.update(_EMP_TABLES)
+
+    if any(k in q for k in ("enquiry", "enquiries", "lead")):
+        tables.update(_ENQ_TABLES)
+
+    known = set(_schema_per_table.keys())
+    return [t for t in tables if t in known]
+
+
+def _normalize_text(text: str) -> str:
+    text = (text or "").strip().lower()
+    text = re.sub(r"\bpensding\b|\bpanding\b|\bpendng\b", "pending", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _tokenize(text: str) -> list[str]:
+    return [t for t in re.findall(r"[a-zA-Z]+", _normalize_text(text)) if len(t) >= 3]
+
+
+def _rule_intent(question: str) -> str | None:
+    q = _normalize_text(question)
+    if any(k in q for k in ("pending", "report", "collection", "task", "kaam", "po", "stock")):
+        return "DatabaseQuery"
+    if any(k in q for k in ("create task", "assign task", "new task", "task banao")):
+        return "TaskCreation"
+    if any(k in q for k in ("hi", "hello", "thanks", "thank you")):
+        return "Conversation"
+    return None
+
+
+def _match_rule_score(rule_tokens: list[str], query_tokens: list[str]) -> float:
+    if not rule_tokens or not query_tokens:
+        return 0.0
+    rule = set(rule_tokens)
+    query = set(query_tokens)
+    overlap = len(rule.intersection(query))
+    return overlap / max(1, len(rule))
+
+
+def _get_learned_intent(question: str) -> str | None:
+    memory = load_memory()
+    query_tokens = _tokenize(question)
+    now = datetime.now(timezone.utc)
+    best_intent = None
+    best_score = 0.0
+    for rule in memory.get("intent_rules", []):
+        if not rule.get("enabled", True):
+            continue
+        expires_at = rule.get("expires_at")
+        if expires_at:
+            try:
+                if datetime.fromisoformat(expires_at) < now:
+                    continue
+            except Exception:
+                pass
+        # Support both "pattern_tokens" (new format) and "tokens" (legacy format).
+        # Migrate old key in-place so it's normalized after the next save.
+        if "tokens" in rule and "pattern_tokens" not in rule:
+            rule["pattern_tokens"] = rule.pop("tokens")
+        score = _match_rule_score(rule.get("pattern_tokens", []), query_tokens)
+        threshold = float(rule.get("confidence", 0.75))
+        if score >= threshold and score > best_score:
+            best_score = score
+            best_intent = rule.get("intent")
+            rule["hit_count"] = int(rule.get("hit_count", 0)) + 1
+            rule["last_used_at"] = now_iso()
+    if best_intent:
+        save_memory(memory)
+    return best_intent
+
+
+def _record_fallback_candidate(question: str, intent: str) -> None:
+    tokens = _tokenize(question)[:8]
+    if len(tokens) < 2:
+        return
+    memory = load_memory()
+    candidates = memory.setdefault("intent_candidates", [])
+    for cand in candidates:
+        if cand.get("intent") == intent and cand.get("pattern_tokens") == tokens:
+            cand["hit_count"] = int(cand.get("hit_count", 0)) + 1
+            cand["last_used_at"] = now_iso()
+            break
+    else:
+        candidates.append(
+            {
+                "pattern_tokens": tokens,
+                "intent": intent,
+                "hit_count": 1,
+                "created_at": now_iso(),
+                "last_used_at": now_iso(),
+            }
+        )
+    # Promote candidates after enough repeated hits.
+    rules = memory.setdefault("intent_rules", [])
+    for cand in list(candidates):
+        if int(cand.get("hit_count", 0)) >= 3:
+            rules.append(
+                {
+                    "id": f"r-{len(rules)+1}",
+                    "pattern_tokens": cand.get("pattern_tokens", []),
+                    "intent": cand.get("intent", "DatabaseQuery"),
+                    "confidence": 0.7,
+                    "source": "llm_promoted",
+                    "hit_count": 0,
+                    "success_count": 0,
+                    "failure_count": 0,
+                    "created_at": now_iso(),
+                    "last_used_at": now_iso(),
+                    "expires_at": None,
+                    "enabled": True,
+                }
+            )
+            candidates.remove(cand)
+    save_memory(memory)
+
+
+def _is_simple_result(result_text: str) -> bool:
+    if not result_text:
+        return True
+    # Heuristic: small tuple list typically under this size.
+    return len(result_text) <= 1800
+
+
+def _render_simple_template(state: AgentState) -> str:
+    return (
+        "### Result\n\n"
+        f"- Query executed successfully.\n"
+        f"- Preview data:\n\n`{str(state.get('result') or '')[:1400]}`"
+    )
+
+
+def _is_list_query(question: str) -> bool:
+    q = _normalize_text(question)
+    # Aggregate questions want a number, not a paginated list — skip the list-preview path.
+    if any(k in q for k in ("total", "count", "how many", "kitne", "kitna", "sum", "average", "avg")):
+        return False
+    markers = ("list", "show", "pending", "tasks", "records", "entries", "kaam", "do")
+    return any(m in q for m in markers)
+
+
+def _parse_result_rows(raw_result):
+    if isinstance(raw_result, list):
+        return raw_result
+    if isinstance(raw_result, str):
+        try:
+            parsed = ast.literal_eval(raw_result)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            return []
+    return []
+
+
+def _render_list_preview(result_dict: dict) -> str:
+    total = int(result_dict.get("total_count", 0) or 0)
+    cols = result_dict.get("preview_columns") or []
+    rows = result_dict.get("preview_rows") or []
+    if not rows:
+        return (
+            "### Result Preview\n\n"
+            f"- Total records: **{total}**\n"
+            "- Showing preview: **first 20 rows**\n\n"
+            "_No preview rows available for this result._"
+        )
+
+    header_line = "| " + " | ".join(cols) + " |"
+    sep_line = "|" + "|".join(["---"] * len(cols)) + "|"
+    body = []
+    for row in rows[:20]:
+        body.append("| " + " | ".join(_format_value(v, col) for v, col in zip(row, cols)) + " |")
+
+    return (
+        "### Result Preview\n\n"
+        f"- Total records: **{total}**\n"
+        "- Showing preview: **first 20 rows**\n\n"
+        + "\n".join([header_line, sep_line] + body)
+    )
+
+
+_CURRENCY_KEYWORDS = {"amount", "value", "price", "payment", "paisa", "balance", "bal",
+                      "receipt", "collection", "pending_amount", "total_amount", "lena", "dena"}
+
+
+def _format_value(v, col_name: str = "") -> str:
+    """Format a single DB cell value for display in a markdown table."""
+    if v is None:
+        return "-"
+    cls = type(v).__name__
+    col_lower = col_name.lower()
+    is_currency = cls == "Decimal" or any(k in col_lower for k in _CURRENCY_KEYWORDS)
+
+    if cls in ("Decimal", "int", "float") and is_currency:
+        num = float(v)
+        if num >= 10_000_000:
+            return f"₹{num / 10_000_000:.2f} Cr"
+        if num >= 100_000:
+            return f"₹{num / 100_000:.2f} L"
+        if num >= 1_000:
+            return f"₹{num:,.0f}"
+        return f"₹{num:.2f}"
+
+    if cls in ("int", "float"):
+        num = float(v)
+        if num >= 10_000_000:
+            return f"{num / 10_000_000:.2f} Cr"
+        if num >= 100_000:
+            return f"{num / 100_000:.2f} L"
+        if num >= 1_000:
+            return f"{num:,.0f}"
+        return str(int(num)) if num == int(num) else f"{num:.2f}"
+
+    if cls in ("date", "datetime"):
+        return v.strftime("%d-%m-%Y")
+    s = str(v).replace("\n", " ").strip()
+    return (s[:78] + "…") if len(s) > 80 else s
+
+
+def _render_table(result_dict: dict) -> str:
+    """Render a structured non-list query result as a markdown table."""
+    cols = result_dict.get("columns") or []
+    rows = result_dict.get("rows") or []
+    if not rows:
+        return "### Result\n\n_No data found._"
+    # Single scalar — render as a clean key-value line, not a 1-row table.
+    if len(rows) == 1 and len(cols) == 1:
+        label = cols[0].replace("_", " ").title()
+        return f"### Result\n\n**{label}:** {_format_value(rows[0][0], cols[0])}"
+    header = "| " + " | ".join(cols) + " |"
+    sep = "|" + "|".join(["---"] * len(cols)) + "|"
+    body = [
+        "| " + " | ".join(_format_value(v, col) for v, col in zip(row, cols)) + " |"
+        for row in rows
+    ]
+    count_line = f"- Total rows: **{len(rows)}**\n\n" if len(rows) > 1 else ""
+    return "### Result\n\n" + count_line + "\n".join([header, sep] + body)
+
+
+def _stream_template_answer(answer: str, put_token) -> None:
+    """Send template content line-by-line with a small delay for smooth rendering.
+    Avoids the char-by-char flood that makes streaming appear stuck."""
+    lines = answer.split('\n')
+    for i, line in enumerate(lines):
+        chunk = line + ('\n' if i < len(lines) - 1 else '')
+        put_token(chunk)
+        time.sleep(0.012)  # 12ms per line ≈ smooth typewriter effect
+
+
+def _learn_summary_pattern(question: str, template_id: str) -> None:
+    tokens = sorted(_tokenize(question)[:5])
+    if not tokens:
+        return
+    key = ",".join(tokens)
+    memory = load_memory()
+    patterns = memory.setdefault("summary_patterns", {})
+    item = patterns.get(key, {"template_id": template_id, "uses": 0})
+    item["template_id"] = template_id
+    item["uses"] = int(item.get("uses", 0)) + 1
+    item["last_used_at"] = now_iso()
+    patterns[key] = item
+    save_memory(memory)
+
+
+def _get_learned_summary_template(question: str) -> str | None:
+    """Return the template_id learned for this question pattern, or None if unknown/unseen."""
+    tokens = sorted(_tokenize(question)[:5])
+    if not tokens:
+        return None
+    key = ",".join(tokens)
+    memory = load_memory()
+    item = memory.get("summary_patterns", {}).get(key)
+    if item and int(item.get("uses", 0)) >= 2:
+        return item.get("template_id")
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +423,16 @@ def classify_intent_node(state: AgentState):
     """Classifies the user's question by forcing the LLM to call a specific tool."""
     _send_status("Analysing your question...")
     print("--- Classifying Intent (with Function Calling) ---")
+    question = state["question"]
+    rule_intent = _rule_intent(question)
+    if rule_intent:
+        print(f"Intent: {rule_intent} (rule)")
+        return {"intent": rule_intent}
+    learned_intent = _get_learned_intent(question)
+    if learned_intent:
+        print(f"Intent: {learned_intent} (learned-rule)")
+        return {"intent": learned_intent}
+
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -75,7 +444,7 @@ def classify_intent_node(state: AgentState):
         ]
     )
     tools = [DatabaseQuery, Conversation, TaskCreation]
-    llm_with_tools = _llm.bind_tools(tools)
+    llm_with_tools = (_intent_llm or _llm).bind_tools(tools)
     runnable = prompt | llm_with_tools
     ai_message = runnable.invoke(
         {
@@ -88,6 +457,7 @@ def classify_intent_node(state: AgentState):
         if not ai_message.tool_calls
         else ai_message.tool_calls[0]["name"]
     )
+    _record_fallback_candidate(question, intent)
     print(f"Intent: {intent}")
     return {"intent": intent}
 
@@ -387,6 +757,7 @@ def generate_query_node(state: AgentState):
         - Ensure EVERY column position has the SAME data type on both sides — check each position before writing the query.
         - Minimal example: `SELECT 'Delegation'::text AS source, "Doer_Name", "Task_Description", "Planned_Date", "Status" FROM "Delegation" UNION ALL SELECT 'Checklist'::text AS source, "Doer_Name", "Task_Description", NULL::date AS "Planned_Date", "Status" FROM "Checklist"`.
     3.  Use advanced matching techniques to respond to more flexible queries.
+    4.  **Case-insensitive grouping:** When using `GROUP BY` on name columns like `"Doer_Name"`, always group on `LOWER("Doer_Name")` and select `INITCAP(MAX("Doer_Name"))` so that "ahitesh tandan" and "Ahitesh Tandan" merge into one group instead of appearing as separate rows.
 
     --- Database Descriptions ---
     - When a user asks about "tasks" or "kaam", they are referring to entries where a table has fields relevant to tasks, like "TaskID", or "Task Description". You MUST query one of given tables that is related to tasks. DO NOT invent or query a non-existent table named "tasks".
@@ -458,14 +829,35 @@ def generate_query_node(state: AgentState):
             - Show all the relevant columns in the final table.
     - Make sure that the output of SQL query gives all data at once. Only give one query.
     --------------------
-    - **IMPORTANT:** Add comments in the SQL query to explain your logic where necessary.
+    - **IMPORTANT:** Do NOT add comments to the SQL query. Return the SQL only.
     - **IMPORTANT:** Only return the SQL query. Do not add any other text or explanation.
     - **IMPORTANT:** If a table or column name contains a space or is a reserved keyword, you MUST wrap it in double quotes. For example: "Task Description".
     - **IMPORTANT:** Use the columns provided in the schema, if user mention a column that is not in schema, try to find the closest relevant column in the schema.
     - **IMPORTANT:** "PO Pending" or "Pending PO" mean orders that are pending. just "PO" means get data from PO pending table.
     """
 
+    # Signature = hash of prompt rules + full schema.
+    # If either changes (prompt update, schema change), every entry auto-invalidates.
+    cache_sig = hashlib.md5(
+        (system_prompt + _schema_full_cache).encode("utf-8", errors="replace")
+    ).hexdigest()[:8]
+
     retries = state.get("retries") or 0
+
+    # Cache check: on first attempt, reuse SQL if sig still matches.
+    # On retry (retries>0) always regenerate — cached SQL may have caused the error.
+    if retries == 0:
+        cache_key = _normalize_text(state["question"])
+        entry = _sql_query_cache.get(cache_key)
+        if isinstance(entry, dict) and entry.get("sig") == cache_sig:
+            _send_status("Writing SQL query...")
+            print(f"Generated Query (cache hit, sig={cache_sig}): {entry['sql'][:120]}...")
+            # Refresh last-used timestamp for LRU ordering
+            entry["used_at"] = now_iso()
+            return {"query": entry["sql"], "retries": 1}
+        elif entry is not None:
+            print(f"Cache entry stale (sig mismatch), regenerating.")
+
     _send_status("Retrying SQL query..." if retries > 0 else "Writing SQL query...")
 
     result_text = state.get("result") or ""
@@ -489,17 +881,39 @@ def generate_query_node(state: AgentState):
             ("human", "{question}"),
         ]
     )
-    runnable = prompt | _llm
+    runnable = prompt | (_sql_llm or _llm)
+    relevant_tables = _get_relevant_tables(state["question"])
+    if relevant_tables:
+        schema_str = "\n\n".join(_schema_per_table[t] for t in relevant_tables)
+    else:
+        schema_str = _schema_full_cache
     raw_query = runnable.invoke(
         {
             "question": state["question"],
             "chat_history": state.get("chat_history", []),
-            "schema": _db.get_table_info(),
+            "schema": schema_str,
             "error": result_text,
         }
     ).content
     sql_query = raw_query.strip().replace("```sql", "").replace("```", "").strip()
     print(f"Generated Query: {sql_query}")
+    # Persist cache entry with sig. Stale/old entries for this key are replaced.
+    if retries == 0:
+        cache_key = _normalize_text(state["question"])
+        new_entry = {"sql": sql_query, "sig": cache_sig, "used_at": now_iso()}
+        _sql_query_cache[cache_key] = new_entry
+        mem = load_memory()
+        sql_cache = mem.setdefault("sql_cache", {})
+        sql_cache[cache_key] = new_entry
+        # LRU eviction: keep max 200 entries, drop least recently used
+        if len(sql_cache) > 200:
+            oldest_key = min(
+                sql_cache,
+                key=lambda k: sql_cache[k].get("used_at", "") if isinstance(sql_cache[k], dict) else ""
+            )
+            del sql_cache[oldest_key]
+            _sql_query_cache.pop(oldest_key, None)
+        save_memory(mem)
     return {"query": sql_query, "retries": int(retries) + 1}
 
 
@@ -507,14 +921,114 @@ def execute_query_node(state: AgentState):
     """Executes the SQL query and returns the result."""
     _send_status("Fetching data from database...")
     print("--- Executing SQL Query ---")
-    query = state["query"]
-    result = _execute_query_tool.invoke(query)
+    query = (state["query"] or "").strip().rstrip(";")
+
+    if _is_list_query(state.get("question", "")):
+        _send_status("Counting total records...")
+        from sqlalchemy import text
+        from ..db import engine
+
+        count_query = f'SELECT COUNT(*) AS total_count FROM ({query}) AS counted_rows'
+        preview_query = f'SELECT * FROM ({query}) AS preview_rows LIMIT 20'
+
+        def _run_count():
+            with engine.connect() as conn:
+                row = conn.execute(text(count_query)).fetchone()
+                return int(row[0]) if row and row[0] is not None else 0
+
+        def _run_preview():
+            with engine.connect() as conn:
+                res = conn.execute(text(preview_query))
+                return [str(k) for k in res.keys()], [tuple(r) for r in res.fetchall()]
+
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            count_f = ex.submit(_run_count)
+            preview_f = ex.submit(_run_preview)
+            total_count = count_f.result()
+            preview_columns, preview_rows = preview_f.result()
+
+        result = {
+            "is_list_preview": True,
+            "total_count": total_count,
+            "preview_columns": preview_columns,
+            "preview_rows": preview_rows,
+        }
+    else:
+        # Use SQLAlchemy directly so we get column names + typed values (not a raw string).
+        # On error, fall back to a string starting with "Error:" so retry logic still works.
+        try:
+            from sqlalchemy import text
+            from ..db import engine
+            with engine.connect() as conn:
+                res = conn.execute(text(query))
+                cols = [str(k) for k in res.keys()]
+                rows = [tuple(r) for r in res.fetchall()]
+            result = {"is_table": True, "columns": cols, "rows": rows}
+        except Exception as exc:
+            result = f"Error: {exc}"
+
     print(f"Query Result: {result}")
     return {"result": result}
 
 
 def summarize_result_node(state: AgentState):
     """Takes the query result and creates a natural language answer."""
+    question = state.get("question", "")
+    result = state.get("result")
+    learned = _get_learned_summary_template(question)
+
+    # Fast-path: learned template routes us directly, skipping all shape checks.
+    if learned == "list_preview_v1" and isinstance(result, dict) and result.get("is_list_preview"):
+        _send_status("Preparing answer...")
+        answer = _render_list_preview(result)
+        put_token = _get_token_cb()
+        if put_token:
+            _stream_template_answer(answer, put_token)
+        _learn_summary_pattern(question, "list_preview_v1")
+        print(f"Final Answer: {answer}")
+        return {"answer": answer}
+
+    if learned == "table_template_v1" and isinstance(result, dict) and result.get("is_table"):
+        _send_status("Preparing answer...")
+        answer = _render_table(result)
+        put_token = _get_token_cb()
+        if put_token:
+            _stream_template_answer(answer, put_token)
+        _learn_summary_pattern(question, "table_template_v1")
+        print(f"Final Answer: {answer}")
+        return {"answer": answer}
+
+    # No learned template (or llm_summary_v1) — fall through to shape checks.
+    if isinstance(result, dict) and result.get("is_list_preview"):
+        _send_status("Preparing answer...")
+        answer = _render_list_preview(result)
+        put_token = _get_token_cb()
+        if put_token:
+            _stream_template_answer(answer, put_token)
+        _learn_summary_pattern(question, "list_preview_v1")
+        print(f"Final Answer: {answer}")
+        return {"answer": answer}
+
+    if isinstance(result, dict) and result.get("is_table"):
+        _send_status("Preparing answer...")
+        answer = _render_table(result)
+        put_token = _get_token_cb()
+        if put_token:
+            _stream_template_answer(answer, put_token)
+        _learn_summary_pattern(question, "table_template_v1")
+        print(f"Final Answer: {answer}")
+        return {"answer": answer}
+
+    if _is_simple_result(str(result or "")):
+        _send_status("Preparing answer...")
+        answer = _render_simple_template(state)
+        put_token = _get_token_cb()
+        if put_token:
+            _stream_template_answer(answer, put_token)
+        _learn_summary_pattern(question, "simple_template_v1")
+        print(f"Final Answer: {answer}")
+        return {"answer": answer}
+
     system_prompt = """
     You are a helpful AI assistant, Diya. 
     Your job is to answer the user's question in concise manner, based on the data provided, which should be easy and fast to read, with markup and lists and tables if needed. 
@@ -548,11 +1062,11 @@ def summarize_result_node(state: AgentState):
             ),
         ]
     )
-    runnable = prompt | _llm
+    runnable = prompt | (_summary_llm or _llm)
     invoke_kwargs = {
-        "question": state["question"],
+        "question": question,
         "query": state["query"],
-        "result": state["result"],
+        "result": result,
     }
     put_token = _get_token_cb()
     if put_token:
@@ -564,6 +1078,7 @@ def summarize_result_node(state: AgentState):
                 answer += token
     else:
         answer = runnable.invoke(invoke_kwargs).content
+    _learn_summary_pattern(question, "llm_summary_v1")
     print(f"Final Answer: {answer}")
     return {"answer": answer}
 

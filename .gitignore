@@ -16,6 +16,7 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
+backend\app\agent\runtime_memory.json
 
 # Node / frontend artifacts
 node_modules/

@@ -18,6 +18,7 @@ from langchain_openai import ChatOpenAI
 from .core.config import settings
 from .db import db
 from .agent import build_agent
+from .agent.nodes import set_aux_llms
 from .api.routes import router
 
 
@@ -30,6 +31,22 @@ async def lifespan(app: FastAPI):
         api_key=settings.OPENAI_API_KEY,
         streaming=True,
     )
+    fast_llm = ChatOpenAI(
+        model=settings.FAST_LLM_MODEL,
+        temperature=0,
+        api_key=settings.OPENAI_API_KEY,
+        streaming=True,
+    )
+    # SQL generation never streams tokens to the user — non-streaming avoids SSE overhead.
+    # max_tokens caps output to prevent runaway verbose queries.
+    sql_llm = ChatOpenAI(
+        model=settings.LLM_MODEL,
+        temperature=0,
+        api_key=settings.OPENAI_API_KEY,
+        streaming=False,
+        max_tokens=1000,
+    )
+    set_aux_llms(intent_llm=fast_llm, summary_llm=fast_llm, sql_llm=sql_llm)
     app.state.agent = build_agent(llm, db)
     print("✅  Botivate AI agent compiled and ready.")
     yield

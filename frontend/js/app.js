@@ -1,12 +1,10 @@
 /**
  * app.js
- * ──────
+ * ------
  * Application entry-point.
  * Wires together ui.js, api.js, and CONFIG from config.js.
  * All three must be loaded before this script runs.
  */
-
-// ── Event listeners ──────────────────────────────────────────────────────────
 
 sendButton.addEventListener('click', handleSend);
 
@@ -18,23 +16,20 @@ messageInput.addEventListener('keydown', (e) => {
 });
 
 setupInputAutoGrow();
-
-// ── Core send handler ─────────────────────────────────────────────────────────
+const latencyChip = document.getElementById('latency-chip');
 
 async function handleSend() {
     const userInput = messageInput.value.trim();
     if (!userInput) return;
 
-    // 1. Render user message & snapshot history BEFORE resetting input
     addMessage('user', userInput);
     const chatHistory = buildChatHistory(CONFIG.HISTORY_TURNS_TO_KEEP);
     resetInput();
 
-    // 2. Show loading bubble
     const loadingEl = addMessage('bot', createLoadingHTML());
 
-    // 3. Call backend (streaming)
     try {
+        const startedAt = performance.now();
         let streamedText = '';
         let hasStreamed = false;
 
@@ -44,8 +39,6 @@ async function handleSend() {
             (chunk) => {
                 hasStreamed = true;
                 streamedText += chunk;
-                // Show plain text while streaming so every token is immediately visible.
-                // Full markdown is applied only once streaming is done.
                 const escaped = streamedText
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
@@ -56,7 +49,6 @@ async function handleSend() {
                 );
             },
             (status) => {
-                // Only show status while no text has streamed yet.
                 if (!hasStreamed) {
                     updateMessageContent(
                         loadingEl,
@@ -66,23 +58,27 @@ async function handleSend() {
             }
         );
 
-        // Replace plain streaming text with fully-parsed markdown when done.
         if (streamedText) {
             updateMessageContent(loadingEl, DOMPurify.sanitize(marked.parse(streamedText)));
+        }
+
+        const elapsedMs = performance.now() - startedAt;
+        if (latencyChip) {
+            latencyChip.textContent = `Last response: ${(elapsedMs / 1000).toFixed(2)}s`;
         }
     } catch (err) {
         console.error('Chat API error:', err);
         updateMessageContent(
             loadingEl,
-            '<p>⚠️ An error occurred. Please try again later.</p>'
+            '<p>An error occurred. Please try again later.</p>'
         );
+        if (latencyChip) {
+            latencyChip.textContent = 'Last response: failed';
+        }
     }
 }
 
-// ── Initialisation ────────────────────────────────────────────────────────────
-
 function initializeChat() {
-    // Inject greeting into the pre-rendered bot bubble
     document.getElementById('initial-greeting').innerHTML =
         buildGreetingHTML(CONFIG.DIRECTOR_NAME);
 

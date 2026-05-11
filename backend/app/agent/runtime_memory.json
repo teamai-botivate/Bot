@@ -1,0 +1,129 @@
+{
+  "meta": {
+    "version": 2,
+    "updated_at": "2026-05-11T12:34:56.805101+00:00"
+  },
+  "intent_rules": [
+    {
+      "intent": "DatabaseQuery",
+      "created_at": "2026-05-11T10:16:31.420114+00:00",
+      "last_used_at": "2026-05-11T12:23:38.417091+00:00",
+      "hit_count": 6,
+      "source": "llm_fallback",
+      "pattern_tokens": [
+        "market",
+        "kitna",
+        "paisa",
+        "lena"
+      ]
+    },
+    {
+      "intent": "Conversation",
+      "created_at": "2026-05-11T10:27:37.636820+00:00",
+      "last_used_at": "2026-05-11T10:27:37.636820+00:00",
+      "hit_count": 0,
+      "source": "llm_fallback",
+      "pattern_tokens": [
+        "what",
+        "issue"
+      ]
+    }
+  ],
+  "intent_candidates": [
+    {
+      "pattern_tokens": [
+        "kisse",
+        "kisse",
+        "lena"
+      ],
+      "intent": "DatabaseQuery",
+      "hit_count": 1,
+      "created_at": "2026-05-11T12:23:57.917192+00:00",
+      "last_used_at": "2026-05-11T12:23:57.917192+00:00"
+    }
+  ],
+  "summary_patterns": {
+    "ahitesh,pending,tandan,tasks": {
+      "template_id": "list_preview_v1",
+      "uses": 10,
+      "last_used_at": "2026-05-11T10:15:36.009092+00:00"
+    },
+    "passary,pending,tasks": {
+      "template_id": "list_preview_v1",
+      "uses": 2,
+      "last_used_at": "2026-05-11T09:57:52.770029+00:00"
+    },
+    "kitna,lena,market,paisa": {
+      "template_id": "table_template_v1",
+      "uses": 7,
+      "last_used_at": "2026-05-11T12:23:41.275365+00:00"
+    },
+    "ahitesh,pending,tasks,total": {
+      "template_id": "table_template_v1",
+      "uses": 3,
+      "last_used_at": "2026-05-11T10:34:51.534256+00:00"
+    },
+    "ahitesh,pending,tasks": {
+      "template_id": "list_preview_v1",
+      "uses": 12,
+      "last_used_at": "2026-05-11T12:12:55.557566+00:00"
+    },
+    "first,implemented,rule,self,what": {
+      "template_id": "llm_summary_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-11T11:09:25.892701+00:00"
+    },
+    "pending,show,tasks,the,total": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-11T12:18:49.800048+00:00"
+    },
+    "ahitesh,pending,tasks,the,total": {
+      "template_id": "table_template_v1",
+      "uses": 2,
+      "last_used_at": "2026-05-11T12:19:43.257444+00:00"
+    },
+    "kisse,kisse,lena": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-11T12:23:59.973471+00:00"
+    },
+    "pending,tasks,tell,the,the": {
+      "template_id": "list_preview_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-11T12:26:27.860865+00:00"
+    },
+    "and,baare,batao,kavit,passary": {
+      "template_id": "list_preview_v1",
+      "uses": 3,
+      "last_used_at": "2026-05-11T12:34:17.837507+00:00"
+    },
+    "ahitesh,performance,report": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-11T12:34:35.488066+00:00"
+    },
+    "kavit,performance,report": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-11T12:34:56.805101+00:00"
+    }
+  },
+  "sql_cache": {
+    "kavit passary ke baare me batao and performance and ahitesh tandan ka performace report do": {
+      "sql": "SELECT\n    doer.\"Doer_Name\",\n    doer.\"source\",\n    doer.\"Total_Tasks\",\n    doer.\"Completed_Tasks\",\n    doer.\"Pending_Tasks\",\n    ROUND(\n        CASE WHEN doer.\"Total_Tasks\" > 0 THEN (doer.\"Completed_Tasks\"::decimal / doer.\"Total_Tasks\") * 100 ELSE 0 END\n    ,2) AS \"Completion_Percentage\"\nFROM (\n    SELECT\n        INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\",\n        'Delegation'::text AS source,\n        COUNT(*) AS \"Total_Tasks\",\n        COUNT(*) FILTER (WHERE (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes')) AS \"Completed_Tasks\",\n        COUNT(*) FILTER (WHERE (\"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes'))) AS \"Pending_Tasks\"\n    FROM \"Delegation\"\n    WHERE LOWER(\"Doer_Name\") IN ('kavit passary', 'ahitesh tandan')\n    GROUP BY LOWER(\"Doer_Name\")\n    UNION ALL\n    SELECT\n        INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\",\n        'Checklist'::text AS source,\n        COUNT(*) AS \"Total_Tasks\",\n        COUNT(*) FILTER (WHERE (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes')) AS \"Completed_Tasks\",\n        COUNT(*) FILTER (WHERE (\"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes'))) AS \"Pending_Tasks\"\n    FROM \"Checklist\"\n    WHERE LOWER(\"Doer_Name\") IN ('kavit passary', 'ahitesh tandan')\n    GROUP BY LOWER(\"Doer_Name\")\n) doer\nORDER BY doer.\"Doer_Name\", doer.\"source\";",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-11T12:34:09.974566+00:00"
+    },
+    "performance report of ahitesh": {
+      "sql": "SELECT \n  INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\",\n  source,\n  COUNT(*) AS \"Total_Tasks\",\n  SUM(CASE WHEN (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') THEN 1 ELSE 0 END) AS \"Completed_Tasks\",\n  SUM(CASE WHEN (\"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) THEN 1 ELSE 0 END) AS \"Pending_Tasks\",\n  ROUND(\n    100.0 * SUM(CASE WHEN (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0)\n  ,2) AS \"Completion_Percentage\"\nFROM (\n  SELECT \"Doer_Name\", \"Status\", 'Delegation'::text AS source\n    FROM \"Delegation\"\n    WHERE LOWER(\"Doer_Name\") = 'ahitesh tandan'\n  UNION ALL\n  SELECT \"Doer_Name\", \"Status\", 'Checklist'::text AS source\n    FROM \"Checklist\"\n    WHERE LOWER(\"Doer_Name\") = 'ahitesh tandan'\n) t\nGROUP BY source\nORDER BY source;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-11T12:34:34.753289+00:00"
+    },
+    "performance report of kavit": {
+      "sql": "SELECT \n  INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\",\n  'Delegation'::text AS source,\n  COUNT(*) AS \"Total_Tasks\",\n  COUNT(*) FILTER (WHERE \"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') AS \"Completed_Tasks\",\n  COUNT(*) FILTER (WHERE \"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) AS \"Pending_Tasks\",\n  ROUND(\n    100.0 * COUNT(*) FILTER (WHERE \"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') / NULLIF(COUNT(*),0)\n  ,2) AS \"Completion_Percentage\"\nFROM \"Delegation\"\nWHERE LOWER(\"Doer_Name\") = LOWER('kavit passary')\nGROUP BY LOWER(\"Doer_Name\")",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-11T12:34:56.230960+00:00"
+    }
+  }
+}
