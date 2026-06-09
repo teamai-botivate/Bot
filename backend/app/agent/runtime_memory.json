@@ -1,14 +1,14 @@
 {
   "meta": {
     "version": 2,
-    "updated_at": "2026-05-11T12:34:56.805101+00:00"
+    "updated_at": "2026-06-09T06:16:44.897257+00:00"
   },
   "intent_rules": [
     {
       "intent": "DatabaseQuery",
       "created_at": "2026-05-11T10:16:31.420114+00:00",
-      "last_used_at": "2026-05-11T12:23:38.417091+00:00",
-      "hit_count": 6,
+      "last_used_at": "2026-06-09T06:16:35.278208+00:00",
+      "hit_count": 9,
       "source": "llm_fallback",
       "pattern_tokens": [
         "market",
@@ -27,19 +27,58 @@
         "what",
         "issue"
       ]
-    }
-  ],
-  "intent_candidates": [
+    },
     {
+      "id": "r-3",
       "pattern_tokens": [
         "kisse",
         "kisse",
         "lena"
       ],
       "intent": "DatabaseQuery",
+      "confidence": 0.7,
+      "source": "llm_promoted",
+      "hit_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "created_at": "2026-05-20T11:16:08.638368+00:00",
+      "last_used_at": "2026-05-20T11:16:08.638368+00:00",
+      "expires_at": null,
+      "enabled": true
+    }
+  ],
+  "intent_candidates": [
+    {
+      "pattern_tokens": [
+        "total",
+        "kitne",
+        "hue"
+      ],
+      "intent": "DatabaseQuery",
       "hit_count": 1,
-      "created_at": "2026-05-11T12:23:57.917192+00:00",
-      "last_used_at": "2026-05-11T12:23:57.917192+00:00"
+      "created_at": "2026-05-20T10:49:15.372061+00:00",
+      "last_used_at": "2026-05-20T10:49:15.372061+00:00"
+    },
+    {
+      "pattern_tokens": [
+        "kavit",
+        "passary",
+        "details"
+      ],
+      "intent": "DatabaseQuery",
+      "hit_count": 1,
+      "created_at": "2026-05-20T11:04:09.935960+00:00",
+      "last_used_at": "2026-05-20T11:04:09.935960+00:00"
+    },
+    {
+      "pattern_tokens": [
+        "kisse",
+        "kisse"
+      ],
+      "intent": "DatabaseQuery",
+      "hit_count": 1,
+      "created_at": "2026-06-09T06:16:42.726541+00:00",
+      "last_used_at": "2026-06-09T06:16:42.726541+00:00"
     }
   ],
   "summary_patterns": {
@@ -55,8 +94,8 @@
     },
     "kitna,lena,market,paisa": {
       "template_id": "table_template_v1",
-      "uses": 7,
-      "last_used_at": "2026-05-11T12:23:41.275365+00:00"
+      "uses": 10,
+      "last_used_at": "2026-06-09T06:16:36.055683+00:00"
     },
     "ahitesh,pending,tasks,total": {
       "template_id": "table_template_v1",
@@ -85,8 +124,8 @@
     },
     "kisse,kisse,lena": {
       "template_id": "table_template_v1",
-      "uses": 1,
-      "last_used_at": "2026-05-11T12:23:59.973471+00:00"
+      "uses": 3,
+      "last_used_at": "2026-05-20T11:16:19.913531+00:00"
     },
     "pending,tasks,tell,the,the": {
       "template_id": "list_preview_v1",
@@ -107,6 +146,41 @@
       "template_id": "table_template_v1",
       "uses": 1,
       "last_used_at": "2026-05-11T12:34:56.805101+00:00"
+    },
+    "ahitesh,pending,tantan,tasks,the": {
+      "template_id": "list_preview_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-13T05:31:43.895303+00:00"
+    },
+    "kavit,passary,performance,report,the": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-13T05:32:10.161246+00:00"
+    },
+    "hue,kitne,total": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-20T10:49:17.703557+00:00"
+    },
+    "emmployees,have,list,the,who": {
+      "template_id": "list_preview_v1",
+      "uses": 2,
+      "last_used_at": "2026-05-20T10:50:09.029503+00:00"
+    },
+    "ahitesh,and,kavit,performance,report": {
+      "template_id": "list_preview_v1",
+      "uses": 1,
+      "last_used_at": "2026-05-20T10:50:52.887005+00:00"
+    },
+    "give,performance,report,the,the": {
+      "template_id": "table_template_v1",
+      "uses": 2,
+      "last_used_at": "2026-05-20T11:03:46.924947+00:00"
+    },
+    "kisse,kisse": {
+      "template_id": "table_template_v1",
+      "uses": 1,
+      "last_used_at": "2026-06-09T06:16:44.897257+00:00"
     }
   },
   "sql_cache": {
@@ -124,6 +198,76 @@
       "sql": "SELECT \n  INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\",\n  'Delegation'::text AS source,\n  COUNT(*) AS \"Total_Tasks\",\n  COUNT(*) FILTER (WHERE \"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') AS \"Completed_Tasks\",\n  COUNT(*) FILTER (WHERE \"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) AS \"Pending_Tasks\",\n  ROUND(\n    100.0 * COUNT(*) FILTER (WHERE \"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') / NULLIF(COUNT(*),0)\n  ,2) AS \"Completion_Percentage\"\nFROM \"Delegation\"\nWHERE LOWER(\"Doer_Name\") = LOWER('kavit passary')\nGROUP BY LOWER(\"Doer_Name\")",
       "sig": "d1f16c51",
       "used_at": "2026-05-11T12:34:56.230960+00:00"
+    },
+    "pending tasks of the ahitesh tantan": {
+      "sql": "SELECT source, \"Doer_Name\", \"Task_Description\", \"Planned_Date\", \"Task_Start_Date\", \"Status\"\nFROM (\n    SELECT \n        'Delegation'::text AS source,\n        \"Doer_Name\",\n        \"Task_Description\",\n        \"Planned_Date\",\n        \"Task_Start_Date\",\n        \"Status\"\n    FROM \"Delegation\"\n    WHERE \n        LOWER(\"Doer_Name\") = LOWER('Ahitesh tantan')\n        AND (\n            \"Status\" IS NULL OR TRIM(\"Status\") = '' OR \n            (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')\n        )\n    UNION ALL\n    SELECT \n        'Checklist'::text AS source,\n        \"Doer_Name\",\n        \"Task_Description\",\n        NULL::date AS \"Planned_Date\",\n        \"Task_Start_Date\",\n        \"Status\"\n    FROM \"Checklist\"\n    WHERE \n        LOWER(\"Doer_Name\") = LOWER('Ahitesh tantan')\n        AND (\n            \"Status\" IS NULL OR TRIM(\"Status\") = '' OR \n            (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')\n        )\n        AND \"Task_Start_Date\" <= CURRENT_DATE\n) AS pending_tasks\nORDER BY \"Task_Start_Date\" DESC;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-13T05:31:40.770114+00:00"
+    },
+    "performance report of the kavit passary": {
+      "sql": "SELECT\n    'Delegation'::text AS source,\n    COUNT(*) AS total_tasks,\n    COUNT(CASE WHEN (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') THEN 1 END) AS total_completed,\n    COUNT(CASE WHEN (\"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) THEN 1 END) AS total_pending,\n    INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\"\nFROM \"Delegation\"\nWHERE LOWER(\"Given_By\") = LOWER('kavit passary')\nUNION ALL\nSELECT\n    'Checklist'::text AS source,\n    COUNT(*) AS total_tasks,\n    COUNT(CASE WHEN (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') THEN 1 END) AS total_completed,\n    COUNT(CASE WHEN (\"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) THEN 1 END) AS total_pending,\n    INITCAP(MAX(\"Given_By\")) AS \"Doer_Name\"\nFROM \"Checklist\"\nWHERE LOWER(\"Given_By\") = LOWER('kavit passary')",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-13T05:32:09.053575+00:00"
+    },
+    "market se kitna paisa lena h": {
+      "sql": "SELECT \n    COUNT(*) AS total_parties,\n    SUM(\"Total_Pending_Amount\") AS total_pending_amount,\n    COUNT(CASE WHEN \"Total_Pending_Amount\" > 0 THEN 1 END) AS parties_with_pending,\n    MIN(\"Expected_Date_Of_Payment\") AS earliest_expected_payment,\n    MAX(\"Expected_Date_Of_Payment\") AS latest_expected_payment\nFROM \"Collection_Pending\";",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T10:47:04.872165+00:00"
+    },
+    "kisse kisse lena h": {
+      "sql": "SELECT \n    \"Party_Names\", \n    \"Total_Pending_Amount\", \n    \"Expected_Date_Of_Payment\", \n    \"Collection_Remarks\"\nFROM \n    \"Collection_Pending\"\nORDER BY \n    \"Total_Pending_Amount\" DESC;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T10:49:06.425760+00:00"
+    },
+    "total kitne hue ?": {
+      "sql": "SELECT COUNT(*) AS total_parties, SUM(\"Total_Pending_Amount\") AS total_pending_amount\nFROM \"Collection_Pending\"",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T10:49:17.032822+00:00"
+    },
+    "list of the emmployees who have done thier tasks on time": {
+      "sql": "SELECT source, \"Doer_Name\", \"Task_Description\", \"Actual\", \"Task_Start_Date\"\nFROM (\n    SELECT 'Delegation'::text AS source, \"Doer_Name\", \"Task_Description\", \"Actual\", \"Planned_Date\" AS \"Task_Start_Date\"\n    FROM \"Delegation\"\n    WHERE (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes')\n      AND \"Actual\" IS NOT NULL\n      AND \"Planned_Date\" IS NOT NULL\n      AND \"Actual\" <= \"Planned_Date\"\n    UNION ALL\n    SELECT 'Checklist'::text AS source, \"Doer_Name\", \"Task_Description\", \"Actual\", \"Task_Start_Date\"\n    FROM \"Checklist\"\n    WHERE (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes')\n      AND \"Actual\" IS NOT NULL\n      AND \"Task_Start_Date\" IS NOT NULL\n      AND \"Actual\" <= \"Task_Start_Date\"\n) AS completed_on_time\nORDER BY \"Doer_Name\", \"Task_Start_Date\";",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T10:49:54.820304+00:00"
+    },
+    "ahetesh ka performance report and kavit passary ka performace report do": {
+      "sql": "SELECT\n    doer,\n    total_tasks,\n    tasks_done,\n    tasks_pending,\n    ROUND(100.0 * tasks_done / NULLIF(total_tasks,0),2) AS completion_percent,\n    tasks_ontime,\n    ROUND(100.0 * tasks_ontime / NULLIF(tasks_done,0),2) AS ontime_percent\nFROM (\n    SELECT\n        doer,\n        COUNT(*) AS total_tasks,\n        SUM(CASE WHEN status_done THEN 1 ELSE 0 END) AS tasks_done,\n        SUM(CASE WHEN NOT status_done THEN 1 ELSE 0 END) AS tasks_pending,\n        SUM(CASE WHEN status_done AND on_time THEN 1 ELSE 0 END) AS tasks_ontime\n    FROM (\n        SELECT\n            INITCAP(\"Doer_Name\") AS doer,\n            \"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes' AS status_done,\n            CASE\n                WHEN source = 'Delegation' THEN\n                    (\"Actual\" IS NOT NULL AND \"Planned_Date\" IS NOT NULL AND \"Actual\" <= \"Planned_Date\")\n                WHEN source = 'Checklist' THEN\n                    (\"Actual\" IS NOT NULL AND \"Task_Start_Date\" IS NOT NULL AND \"Actual\" <= \"Task_Start_Date\")\n                ELSE FALSE\n            END AS on_time\n        FROM (\n            SELECT 'Delegation'::text AS source, \"Doer_Name\", \"Status\", \"Actual\", \"Planned_Date\"\n            FROM \"Delegation\"\n            WHERE LOWER(\"Doer_Name\") IN ('ahitesh tandan', 'kavit passary')\n            UNION ALL\n            SELECT 'Checklist'::text AS source, \"Doer_Name\", \"Status\", \"Actual\", \"Task_Start_Date\" AS \"Planned_Date\"\n            FROM \"Checklist\"\n            WHERE LOWER(\"Doer_Name\") IN ('ahitesh tandan', 'kavit passary')\n        ) t\n    ) t2\n    GROUP BY doer\n) t3\nORDER BY doer;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T10:50:33.784716+00:00"
+    },
+    "ahitesh ka performance report and kavit passary ka performace report do": {
+      "sql": "SELECT \n    doer,\n    total_tasks,\n    completed_tasks,\n    pending_tasks,\n    on_time_tasks,\n    late_tasks,\n    ROUND(100.0 * completed_tasks / NULLIF(total_tasks,0),2) AS completion_rate_percent,\n    ROUND(100.0 * on_time_tasks / NULLIF(completed_tasks,0),2) AS on_time_completion_percent\nFROM (\n    SELECT \n        doer,\n        COUNT(*) AS total_tasks,\n        SUM(CASE WHEN status_complete THEN 1 ELSE 0 END) AS completed_tasks,\n        SUM(CASE WHEN NOT status_complete THEN 1 ELSE 0 END) AS pending_tasks,\n        SUM(CASE WHEN status_complete AND on_time THEN 1 ELSE 0 END) AS on_time_tasks,\n        SUM(CASE WHEN status_complete AND NOT on_time THEN 1 ELSE 0 END) AS late_tasks\n    FROM (\n        SELECT \n            INITCAP(\"Doer_Name\") AS doer,\n            \"Task_Description\",\n            \"Task_Start_Date\",\n            \"Actual\",\n            \"Status\",\n            -- Completed status\n            ((\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes')) AS status_complete,\n            -- On time: Actual date <= Task_Start_Date (for Checklist), Actual date <= Planned_Date (for Delegation)\n            CASE \n                WHEN source = 'Checklist' THEN \n                    (\"Actual\" IS NOT NULL AND \"Task_Start_Date\" IS NOT NULL AND \"Actual\" <= \"Task_Start_Date\")\n                WHEN source = 'Delegation' THEN \n                    (\"Actual\" IS NOT NULL AND \"Planned_Date\" IS NOT NULL AND \"Actual\" <= \"Planned_Date\")\n                ELSE FALSE\n            END AS on_time\n        FROM (\n            SELECT \n                'Checklist'::text AS source,\n                \"Doer_Name\",\n                \"Task_Description\",\n                \"Task_Start_Date\",\n                \"Actual\",\n                \"Status\",\n                NULL::date AS \"Planned_Date\"\n            FROM \"Checklist\"\n            WHERE LOWER(\"Doer_Name\") IN ('ahitesh tandan', 'kavit passary')\n            UNION ALL\n            SELECT \n                'Delegation'::text AS source,\n                \"Doer_Name\",\n                \"Task_Description\",\n                NULL::date AS \"Task_Start_Date\",\n                \"Actual\",\n                \"Status\",\n                \"Planned_Date\"\n            FROM \"Delegation\"\n            WHERE LOWER(\"Doer_Name\") IN ('ahitesh tandan', 'kavit passary')\n        ) t\n    ) t2\n    GROUP BY doer\n) t3\nORDER BY doer;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T10:50:51.582343+00:00"
+    },
+    "give me the performance report of the ahitesh": {
+      "sql": "SELECT\n    INITCAP(MAX(\"Doer_Name\")) AS \"Doer_Name\",\n    COUNT(*) AS total_tasks,\n    COUNT(CASE WHEN (\"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') THEN 1 END) AS total_completed,\n    COUNT(CASE WHEN (\"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) THEN 1 END) AS total_pending,\n    MIN(\"Task_Start_Date\") AS first_task_date,\n    MAX(\"Task_Start_Date\") AS last_task_date\nFROM (\n    SELECT \"Doer_Name\", \"Status\", \"Task_Start_Date\"\n    FROM \"Checklist\"\n    WHERE \"Doer_Name\" ILIKE '%ahitesh%'\n    UNION ALL\n    SELECT \"Doer_Name\", \"Status\", \"Task_Start_Date\"\n    FROM (\n        SELECT \"Doer_Name\", \"Status\", \"Task_Start_Date\"\n        FROM \"Delegation\"\n        WHERE \"Doer_Name\" ILIKE '%ahitesh%'\n    ) d\n) t\nGROUP BY LOWER(\"Doer_Name\")",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T11:03:35.109297+00:00"
+    },
+    "give me the performance report of the ahitesh in formatted way": {
+      "sql": "WITH all_tasks AS (\n    SELECT\n        INITCAP(\"Doer_Name\") AS doer_name,\n        \"Task_Description\",\n        \"Task_Start_Date\" AS task_date,\n        \"Status\",\n        'Checklist'::text AS source\n    FROM \"Checklist\"\n    WHERE LOWER(\"Doer_Name\") LIKE 'ahitesh%'\n    UNION ALL\n    SELECT\n        INITCAP(\"Doer_Name\") AS doer_name,\n        \"Task_Description\",\n        \"Planned_Date\" AS task_date,\n        \"Status\",\n        'Delegation'::text AS source\n    FROM \"Delegation\"\n    WHERE LOWER(\"Doer_Name\") LIKE 'ahitesh%'\n)\nSELECT\n    doer_name,\n    COUNT(*) AS total_tasks,\n    COUNT(*) FILTER (WHERE \"Status\" ILIKE 'done' OR \"Status\" ILIKE 'completed' OR \"Status\" ILIKE 'yes') AS total_completed,\n    COUNT(*) FILTER (WHERE \"Status\" IS NULL OR TRIM(\"Status\") = '' OR (\"Status\" NOT ILIKE 'done' AND \"Status\" NOT ILIKE 'completed' AND \"Status\" NOT ILIKE 'yes')) AS total_pending,\n    MIN(task_date) AS first_task_date,\n    MAX(task_date) AS last_task_date\nFROM all_tasks\nGROUP BY LOWER(doer_name), doer_name\nORDER BY doer_name;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T11:03:45.193246+00:00"
+    },
+    "kavit passary details": {
+      "sql": "SELECT \n    'Delegation'::text AS source,\n    \"Given_By\",\n    \"Doer_Name\",\n    \"Task_Description\",\n    \"Task_Start_Date\",\n    \"Planned_Date\",\n    \"Actual\",\n    \"Status\"\nFROM \"Delegation\"\nWHERE \"Given_By\" ILIKE '%kavit passary%' OR \"Doer_Name\" ILIKE '%kavit passary%'\nUNION ALL\nSELECT \n    'Checklist'::text AS source,\n    \"Given_By\",\n    \"Doer_Name\",\n    \"Task_Description\",\n    \"Task_Start_Date\",\n    NULL::date AS \"Planned_Date\",\n    \"Actual\",\n    \"Status\"\nFROM \"Checklist\"\nWHERE \"Given_By\" ILIKE '%kavit passary%' OR \"Doer_Name\" ILIKE '%kavit passary%'",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T11:04:15.872739+00:00"
+    },
+    "market se kitna paisa lena h ?": {
+      "sql": "SELECT \n    COUNT(*) AS total_parties_with_pending,\n    SUM(\"Total_Pending_Amount\") AS total_pending_amount,\n    COUNT(CASE WHEN \"Total_Pending_Amount\" > 1000000 THEN 1 END) AS parties_above_10_lakh,\n    MAX(\"Total_Pending_Amount\") AS max_pending_from_single_party\nFROM \"Collection_Pending\";",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T11:15:50.102185+00:00"
+    },
+    "kisse kisse lena h ?": {
+      "sql": "SELECT \n    \"Party_Names\", \n    \"Total_Pending_Amount\", \n    \"Expected_Date_Of_Payment\", \n    \"Collection_Remarks\"\nFROM \n    \"Collection_Pending\"\nORDER BY \n    \"Total_Pending_Amount\" DESC;",
+      "sig": "d1f16c51",
+      "used_at": "2026-05-20T11:16:15.337465+00:00"
+    },
+    "kisse kisse ?\\": {
+      "sql": "SELECT \n    \"Party_Names\",\n    \"Total_Pending_Amount\",\n    \"Expected_Date_Of_Payment\",\n    \"Collection_Remarks\"\nFROM \"Collection_Pending\"\nORDER BY \"Total_Pending_Amount\" DESC",
+      "sig": "d1f16c51",
+      "used_at": "2026-06-09T06:16:44.238322+00:00"
     }
   }
 }
