@@ -2,16 +2,30 @@
  * config.js
  * ─────────
  * Central configuration for the Botivate AI frontend.
- * Change API_BASE_URL to point at your backend when deploying.
+ * API_BASE_URL is auto-detected based on the environment.
  */
+
+function getApiBaseUrl() {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (isLocalhost) {
+        return 'http://localhost:8000';
+    }
+
+    // In production, use relative URLs or the same domain
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = window.location.port ? ':' + window.location.port : '';
+
+    return `${protocol}//${hostname}${port}`;
+}
 
 const CONFIG = {
     /**
      * Base URL of the FastAPI backend.
-     * - Local dev  : "http://localhost:8000"
-     * - Production : "https://your-backend-domain.com"
+     * Auto-detects: localhost → http://localhost:8000, otherwise → same origin
      */
-    API_BASE_URL: "http://localhost:8000",
+    API_BASE_URL: getApiBaseUrl(),
 
     /** Persona shown in the greeting message */
     DIRECTOR_NAME: "Satyendra",
