@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: botivate-backend
+    name: botivate-ai
     env: python
     plan: free
     buildCommand: cd backend && pip install -r requirements.txt
@@ -20,11 +20,3 @@ services:
         value: "*"
       - key: ENABLE_SUPABASE
         value: "true"
-
-  - type: static_site
-    name: botivate-frontend
-    staticPublishPath: frontend
-    buildCommand: echo "Frontend is static HTML/JS"
-    routes:
-      - path: /api/*
-        destination: https://botivate-backend.onrender.com

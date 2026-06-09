@@ -8,12 +8,14 @@
 async function testBackendConnection() {
     console.log("🔍 Testing Botivate AI Backend Connection...");
     console.log(`📍 Frontend Origin: ${window.location.origin}`);
-    console.log(`🎯 API Base URL: ${CONFIG.API_BASE_URL}`);
+    const apiUrl = CONFIG.API_BASE_URL || window.location.origin;
+    console.log(`🎯 API Base URL: ${apiUrl}`);
 
     try {
         // Test 1: Health Check
         console.log("\n[TEST 1] Checking /health endpoint...");
-        const healthResponse = await fetch(`${CONFIG.API_BASE_URL}/health`);
+        const apiUrl = CONFIG.API_BASE_URL || window.location.origin;
+        const healthResponse = await fetch(`${apiUrl}/health`);
         if (healthResponse.ok) {
             const healthData = await healthResponse.json();
             console.log("✅ Health check passed:", healthData);
@@ -24,7 +26,7 @@ async function testBackendConnection() {
 
         // Test 2: Root endpoint
         console.log("\n[TEST 2] Checking root (/) endpoint...");
-        const rootResponse = await fetch(`${CONFIG.API_BASE_URL}/`);
+        const rootResponse = await fetch(`${apiUrl}/`);
         if (rootResponse.ok) {
             console.log("✅ Root endpoint accessible");
         } else {
@@ -33,7 +35,7 @@ async function testBackendConnection() {
 
         // Test 3: Chat endpoint without data
         console.log("\n[TEST 3] Checking /chat endpoint (validation)...");
-        const chatResponse = await fetch(`${CONFIG.API_BASE_URL}/chat`, {
+        const chatResponse = await fetch(`${apiUrl}/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

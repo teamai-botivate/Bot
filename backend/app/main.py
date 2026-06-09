@@ -58,7 +58,11 @@ app = FastAPI(title="Botivate RAG Agent API", lifespan=lifespan)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
+# Mount static files from frontend directory
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+# Serve frontend files at root path
+app.mount("", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 # ---------------------------------------------------------------------------
 # CORS
