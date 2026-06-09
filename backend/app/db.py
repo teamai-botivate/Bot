@@ -8,11 +8,18 @@ from langchain_community.utilities import SQLDatabase
 
 from .core.config import settings
 
-if not settings.DATABASE_URI:
-    raise ValueError(
-        "DATABASE_URI is not set. "
-        "Please add it to your .env file or environment variables."
-    )
+db = None
+engine = None
 
-engine = create_engine(settings.DATABASE_URI)
-db = SQLDatabase(engine=engine)
+if settings.DATABASE_URI:
+    try:
+        engine = create_engine(settings.DATABASE_URI, pool_pre_ping=True)
+        db = SQLDatabase(engine=engine)
+        print("✅ Database connected successfully")
+    except Exception as e:
+        print(f"⚠️  Database connection failed: {e}")
+        print("Running in demo mode without database")
+        db = None
+        engine = None
+else:
+    print("⚠️  DATABASE_URI not set. Running in demo mode.")

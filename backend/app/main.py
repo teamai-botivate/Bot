@@ -47,8 +47,12 @@ async def lifespan(app: FastAPI):
         max_tokens=1000,
     )
     set_aux_llms(intent_llm=fast_llm, summary_llm=fast_llm, sql_llm=sql_llm)
-    app.state.agent = build_agent(llm, db)
-    print("✅  Botivate AI agent compiled and ready.")
+    if db is not None:
+        app.state.agent = build_agent(llm, db)
+        print("✅  Botivate AI agent compiled and ready.")
+    else:
+        print("⚠️  Running in demo mode (no database). Agent not available.")
+        app.state.agent = None
     yield
     # (optional teardown here)
 

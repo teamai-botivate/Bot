@@ -74,6 +74,11 @@ async def chat_with_agent(request: Request, body: ChatRequest):
     """
     agent = request.app.state.agent
 
+    if agent is None:
+        return ChatResponse(
+            answer="Demo mode: Database not connected. Please provide DATABASE_URI to enable full functionality."
+        )
+
     history_messages = _build_history_messages(body.chat_history)
 
     initial_state = {
@@ -102,6 +107,27 @@ async def chat_with_agent(request: Request, body: ChatRequest):
 async def chat_with_agent_stream(request: Request, body: ChatRequest):
     """Stream the final answer token-by-token using Server-Sent Events."""
     agent = request.app.state.agent
+
+    if agent is None:
+        async def demo_stream():
+            yield f"data: {json.dumps({'status': 'Demo mode'})}\n\n"
+            yield f"data: {json.dumps({'chunk': 'Database'})}\n\n"
+            yield f"data: {json.dumps({'chunk': ' not'})}\n\n"
+            yield f"data: {json.dumps({'chunk': ' connected.'})}\n\n"
+            yield f"data: {json.dumps({'chunk': ' Please'})}\n\n"
+            yield f"data: {json.dumps({'chunk': ' provide'})}\n\n"
+            yield f"data: {json.dumps({'chunk': ' DATABASE_URI'})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return StreamingResponse(
+            demo_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive",
+            },
+        )
     history_messages = _build_history_messages(body.chat_history)
 
     initial_state = {
