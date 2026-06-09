@@ -58,12 +58,6 @@ app = FastAPI(title="Botivate RAG Agent API", lifespan=lifespan)
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
-# Mount static files from frontend directory
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
-# Serve frontend files at root path
-app.mount("", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
@@ -76,9 +70,24 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Routes
+# Routes (MUST include before static file mounts!)
 # ---------------------------------------------------------------------------
 app.include_router(router)
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return 204 No Content for favicon requests."""
+    return Response(status_code=204)
+
+@app.head("/")
+async def status_check():
+    """Health-check used by load-balancers / uptime monitors."""
+    return Response(status_code=200)
+
 @app.get("/")
 async def serve_frontend():
     """Serve the frontend from the same origin."""
@@ -87,14 +96,10 @@ async def serve_frontend():
         headers={"Cache-Control": "no-store"},
     )
 
+# ---------------------------------------------------------------------------
+# Static Files (MUST mount AFTER routes!)
+# ---------------------------------------------------------------------------
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-
-@app.head("/")
-async def status_check():
-    """Health-check used by load-balancers / uptime monitors."""
-    return Response(status_code=200)
-
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+# Serve frontend files at root path (catch-all, should be last)
+app.mount("", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
