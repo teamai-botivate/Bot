@@ -78,17 +78,10 @@ OUT_OF_SCOPE_RESPONSE = (
     "Please database, reports, tasks, PO, stock, sales, collection, payments, employees, ya enquiries se related question poochiye."
 )
 
-_OUT_OF_SCOPE_KEYWORDS = {
-    "algorithm", "api", "bug", "capital", "class", "code", "coding", "compile",
-    "css", "debug", "essay", "factorial", "function", "game", "html", "java",
-    "javascript", "joke", "leap year", "news", "prime number", "program",
-    "python", "react", "recipe", "rust", "translate", "typescript", "weather",
-}
-
 _DB_SCOPE_KEYWORDS = {
     "checklist", "collection", "database", "delegation", "employee", "enquiry",
     "invoice", "order", "payment", "pending", "po", "purchase", "report", "sales",
-    "stock", "task", "vendor", "kaam", "lena", "dena", "paisa",
+    "sheet", "stock", "task", "vendor", "kaam", "lena", "dena", "paisa",
 }
 
 
@@ -194,23 +187,19 @@ def _rule_intent(question: str) -> str | None:
     q = _normalize_text(question)
     if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
         return "TaskCreation"
-    if _is_clear_out_of_scope(question):
-        return "Conversation"
     if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
         return "DatabaseQuery"
-    if _contains_keyword(q, {"hi", "hello", "thanks", "thank you"}):
-        return "Conversation"
-    return None
+    return "Conversation"
 
 
 def _is_clear_out_of_scope(question: str) -> bool:
-    """Catch obvious non-database requests before learned rules or the LLM can route them."""
+    """Anything without a clear database/task signal is outside this assistant's scope."""
     q = _normalize_text(question)
     if not q:
         return False
-    if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
+    if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
         return False
-    return _contains_keyword(q, _OUT_OF_SCOPE_KEYWORDS)
+    return not _contains_keyword(q, _DB_SCOPE_KEYWORDS)
 
 
 def _match_rule_score(rule_tokens: list[str], query_tokens: list[str]) -> float:
