@@ -78,6 +78,14 @@ OUT_OF_SCOPE_RESPONSE = (
     "Please database, reports, tasks, PO, stock, sales, collection, payments, employees, ya enquiries se related question poochiye."
 )
 
+_GREETING_RESPONSE = (
+    "{greeting} Satyendra Sir,\n\n"
+    "Main database reports aur task creation me help kar sakti hoon. "
+    "Aap Purchase, PO Pending, Sales, Stock, Collection, Payments, Employees, Enquiries, ya Tasks se related question pooch sakte hain."
+)
+
+_GREETING_KEYWORDS = {"hi", "hello", "hey", "namaste", "good morning", "good afternoon", "good evening"}
+
 _DB_SCOPE_KEYWORDS = {
     "checklist", "collection", "database", "delegation", "employee", "enquiry",
     "invoice", "order", "payment", "pending", "po", "purchase", "report", "sales",
@@ -183,6 +191,28 @@ def _contains_keyword(text: str, keywords: set[str]) -> bool:
     return False
 
 
+def _is_greeting(question: str) -> bool:
+    q = _normalize_text(question)
+    if not q:
+        return False
+    if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
+        return False
+    return q in _GREETING_KEYWORDS or q.rstrip("!.") in _GREETING_KEYWORDS
+
+
+def _time_greeting() -> str:
+    hour = datetime.now().hour
+    if hour < 12:
+        return "Good Morning"
+    if hour < 17:
+        return "Good Afternoon"
+    return "Good Evening"
+
+
+def _render_greeting_response() -> str:
+    return _GREETING_RESPONSE.format(greeting=_time_greeting())
+
+
 def _rule_intent(question: str) -> str | None:
     q = _normalize_text(question)
     if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
@@ -196,6 +226,8 @@ def _is_clear_out_of_scope(question: str) -> bool:
     """Anything without a clear database/task signal is outside this assistant's scope."""
     q = _normalize_text(question)
     if not q:
+        return False
+    if _is_greeting(question):
         return False
     if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
         return False
@@ -508,8 +540,9 @@ def handle_conversation_node(state: AgentState):
     """Refuses anything outside the database-backed assistant scope."""
     _send_status("Thinking...")
     print("--- Handling Conversation ---")
-    print(f"Final Answer: {OUT_OF_SCOPE_RESPONSE}")
-    return {"answer": OUT_OF_SCOPE_RESPONSE}
+    answer = _render_greeting_response() if _is_greeting(state.get("question", "")) else OUT_OF_SCOPE_RESPONSE
+    print(f"Final Answer: {answer}")
+    return {"answer": answer}
 
 
 def analyze_query_node(state: AgentState):
