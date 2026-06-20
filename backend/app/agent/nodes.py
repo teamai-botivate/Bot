@@ -73,6 +73,24 @@ _FINANCE_TABLES = {"Collection Pending", "Payments"}
 _EMP_TABLES = {"Employee Details"}
 _ENQ_TABLES = {"Enquirys"}
 
+OUT_OF_SCOPE_RESPONSE = (
+    "Sorry, main sirf connected database ke data se related questions answer kar sakti hoon. "
+    "Please database, reports, tasks, PO, stock, sales, collection, payments, employees, ya enquiries se related question poochiye."
+)
+
+_OUT_OF_SCOPE_KEYWORDS = {
+    "algorithm", "api", "bug", "capital", "class", "code", "coding", "compile",
+    "css", "debug", "essay", "factorial", "function", "game", "html", "java",
+    "javascript", "joke", "leap year", "news", "prime number", "program",
+    "python", "react", "recipe", "rust", "translate", "typescript", "weather",
+}
+
+_DB_SCOPE_KEYWORDS = {
+    "checklist", "collection", "database", "delegation", "employee", "enquiry",
+    "invoice", "order", "payment", "pending", "po", "purchase", "report", "sales",
+    "stock", "task", "vendor", "kaam", "lena", "dena", "paisa",
+}
+
 
 def build_nodes(llm, db):
     """Inject shared resources before the graph is compiled."""
@@ -159,15 +177,40 @@ def _tokenize(text: str) -> list[str]:
     return [t for t in re.findall(r"[a-zA-Z]+", _normalize_text(text)) if len(t) >= 3]
 
 
+def _contains_keyword(text: str, keywords: set[str]) -> bool:
+    for keyword in keywords:
+        if " " in keyword:
+            if keyword in text:
+                return True
+        elif len(keyword) <= 3:
+            if re.search(rf"\b{re.escape(keyword)}\b", text):
+                return True
+        elif keyword in text:
+            return True
+    return False
+
+
 def _rule_intent(question: str) -> str | None:
     q = _normalize_text(question)
-    if any(k in q for k in ("pending", "report", "collection", "task", "kaam", "po", "stock")):
-        return "DatabaseQuery"
-    if any(k in q for k in ("create task", "assign task", "new task", "task banao")):
+    if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
         return "TaskCreation"
-    if any(k in q for k in ("hi", "hello", "thanks", "thank you")):
+    if _is_clear_out_of_scope(question):
+        return "Conversation"
+    if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
+        return "DatabaseQuery"
+    if _contains_keyword(q, {"hi", "hello", "thanks", "thank you"}):
         return "Conversation"
     return None
+
+
+def _is_clear_out_of_scope(question: str) -> bool:
+    """Catch obvious non-database requests before learned rules or the LLM can route them."""
+    q = _normalize_text(question)
+    if not q:
+        return False
+    if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
+        return False
+    return _contains_keyword(q, _OUT_OF_SCOPE_KEYWORDS)
 
 
 def _match_rule_score(rule_tokens: list[str], query_tokens: list[str]) -> float:
@@ -437,7 +480,15 @@ def classify_intent_node(state: AgentState):
         [
             (
                 "system",
-                "You are an intent classifier. Call the appropriate tool based on the user's last message.",
+                (
+                    "You are a strict intent classifier for a database-only assistant. "
+                    "Call DatabaseQuery only when the user asks for information that should be fetched "
+                    "from the connected business database, such as reports, pending tasks, PO, stock, "
+                    "sales, collection, payments, employees, or enquiries. "
+                    "Call TaskCreation only when the user wants to create or update a task in the database. "
+                    "For coding requests, programming examples, general knowledge, explanations, advice, "
+                    "or anything not answerable from the connected database, call Conversation."
+                ),
             ),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", "{question}"),
@@ -457,34 +508,19 @@ def classify_intent_node(state: AgentState):
         if not ai_message.tool_calls
         else ai_message.tool_calls[0]["name"]
     )
+    if intent == "DatabaseQuery" and _is_clear_out_of_scope(question):
+        intent = "Conversation"
     _record_fallback_candidate(question, intent)
     print(f"Intent: {intent}")
     return {"intent": intent}
 
 
 def handle_conversation_node(state: AgentState):
-    """Creates natural conversation with the user."""
+    """Refuses anything outside the database-backed assistant scope."""
     _send_status("Thinking...")
     print("--- Handling Conversation ---")
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "You are a friendly assistant solves user's database related queries, Diya, for Mr. Satyendra, you refer him as Satyendra Sir. Reply to the user politely with a short relevant relevant response. Reply in English or Hindi based on user's question. All currencies are in Rupees until mentioned other wise. Greet user according to current time, i.e., 'Good Morning', 'Good Evening', etc. when needed. Don't just greet on every response. Show the units when needed.",
-            ),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("human", "{question}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ]
-    )
-    tools = [get_current_datetime]
-    agent_runnable = create_openai_functions_agent(_llm, tools, prompt)
-    agent_executor = AgentExecutor(agent=agent_runnable, tools=tools, verbose=True)
-    result = agent_executor.invoke(
-        {"question": state["question"], "chat_history": state.get("chat_history", [])}
-    )
-    print(f"Final Answer: {result['output']}")
-    return {"answer": result["output"]}
+    print(f"Final Answer: {OUT_OF_SCOPE_RESPONSE}")
+    return {"answer": OUT_OF_SCOPE_RESPONSE}
 
 
 def analyze_query_node(state: AgentState):

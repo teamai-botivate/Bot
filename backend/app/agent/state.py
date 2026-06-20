@@ -12,12 +12,12 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 class DatabaseQuery(BaseModel):
-    """The user is asking a question that requires a database query, or can be solved by an sql query"""
+    """The user is asking about data that exists in the connected business database and must be answered by querying that database."""
     pass
 
 
 class Conversation(BaseModel):
-    """The user is greeting, making small talk, or asking a general knowledge question not related to database or cannot be handled with sql."""
+    """The user is greeting, making small talk, asking coding/general knowledge, or asking anything outside the connected database scope."""
     pass
 
 
