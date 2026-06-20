@@ -73,19 +73,6 @@ _FINANCE_TABLES = {"Collection Pending", "Payments"}
 _EMP_TABLES = {"Employee Details"}
 _ENQ_TABLES = {"Enquirys"}
 
-OUT_OF_SCOPE_RESPONSE = (
-    "Sorry, main sirf connected database ke data se related questions answer kar sakti hoon. "
-    "Please database, reports, tasks, PO, stock, sales, collection, payments, employees, ya enquiries se related question poochiye."
-)
-
-_GREETING_RESPONSE = (
-    "{greeting} Satyendra Sir,\n\n"
-    "Main database reports aur task creation me help kar sakti hoon. "
-    "Aap Purchase, PO Pending, Sales, Stock, Collection, Payments, Employees, Enquiries, ya Tasks se related question pooch sakte hain."
-)
-
-_GREETING_KEYWORDS = {"hi", "hello", "hey", "namaste", "good morning", "good afternoon", "good evening"}
-
 _DB_SCOPE_KEYWORDS = {
     "checklist", "collection", "database", "delegation", "employee", "enquiry",
     "invoice", "order", "payment", "pending", "po", "purchase", "report", "sales",
@@ -191,47 +178,13 @@ def _contains_keyword(text: str, keywords: set[str]) -> bool:
     return False
 
 
-def _is_greeting(question: str) -> bool:
-    q = _normalize_text(question)
-    if not q:
-        return False
-    if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
-        return False
-    return q in _GREETING_KEYWORDS or q.rstrip("!.") in _GREETING_KEYWORDS
-
-
-def _time_greeting() -> str:
-    hour = datetime.now().hour
-    if hour < 12:
-        return "Good Morning"
-    if hour < 17:
-        return "Good Afternoon"
-    return "Good Evening"
-
-
-def _render_greeting_response() -> str:
-    return _GREETING_RESPONSE.format(greeting=_time_greeting())
-
-
 def _rule_intent(question: str) -> str | None:
     q = _normalize_text(question)
     if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
         return "TaskCreation"
     if _contains_keyword(q, _DB_SCOPE_KEYWORDS):
         return "DatabaseQuery"
-    return "Conversation"
-
-
-def _is_clear_out_of_scope(question: str) -> bool:
-    """Anything without a clear database/task signal is outside this assistant's scope."""
-    q = _normalize_text(question)
-    if not q:
-        return False
-    if _is_greeting(question):
-        return False
-    if _contains_keyword(q, {"create task", "assign task", "new task", "task banao"}):
-        return False
-    return not _contains_keyword(q, _DB_SCOPE_KEYWORDS)
+    return None
 
 
 def _match_rule_score(rule_tokens: list[str], query_tokens: list[str]) -> float:
@@ -503,12 +456,14 @@ def classify_intent_node(state: AgentState):
                 "system",
                 (
                     "You are a strict intent classifier for a database-only assistant. "
+                    "First understand the user's intent, then decide the route. "
                     "Call DatabaseQuery only when the user asks for information that should be fetched "
                     "from the connected business database, such as reports, pending tasks, PO, stock, "
-                    "sales, collection, payments, employees, or enquiries. "
+                    "sales, collection, payments, employees, enquiries, collections, cash/funds, or business data. "
                     "Call TaskCreation only when the user wants to create or update a task in the database. "
-                    "For coding requests, programming examples, general knowledge, explanations, advice, "
-                    "or anything not answerable from the connected database, call Conversation."
+                    "Call Conversation for greetings, small talk, unclear business questions, coding requests, "
+                    "programming examples, general knowledge, explanations, advice, or anything not directly "
+                    "answerable by querying the connected database."
                 ),
             ),
             MessagesPlaceholder(variable_name="chat_history"),
@@ -529,18 +484,44 @@ def classify_intent_node(state: AgentState):
         if not ai_message.tool_calls
         else ai_message.tool_calls[0]["name"]
     )
-    if intent == "DatabaseQuery" and _is_clear_out_of_scope(question):
-        intent = "Conversation"
     _record_fallback_candidate(question, intent)
     print(f"Intent: {intent}")
     return {"intent": intent}
 
 
 def handle_conversation_node(state: AgentState):
-    """Refuses anything outside the database-backed assistant scope."""
+    """Lets the LLM answer within the assistant's database-backed role."""
     _send_status("Thinking...")
     print("--- Handling Conversation ---")
-    answer = _render_greeting_response() if _is_greeting(state.get("question", "")) else OUT_OF_SCOPE_RESPONSE
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                (
+                    "You are Botivate AI, a database and task assistant for Mr. Satyendra. "
+                    "Refer to him as Satyendra Sir. First understand the user's intent, then apply your role.\n\n"
+                    "Your role:\n"
+                    "- You may answer greetings and small talk naturally.\n"
+                    "- You may explain that you can help with database-backed reports and task creation.\n"
+                    "- You can help with Purchase, PO Pending, Sales Orders, Stock, Collection, Payments, Employees, Enquiries, Tasks, and related business database reports.\n"
+                    "- If the user asks an unclear business/database question, ask a short clarifying question or suggest the relevant report you can fetch.\n"
+                    "- If the user asks anything outside this role, such as coding, general knowledge, personal advice, or unrelated explanations, do not answer the substance of that request. Politely say that you are Botivate AI and can help with related database reports and task creation.\n\n"
+                    "Reply in the same language style as the user when possible. Keep the response short and useful. "
+                    "Use the current time for greetings if needed; call the current datetime tool when needed."
+                ),
+            ),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{question}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ]
+    )
+    tools = [get_current_datetime]
+    agent_runnable = create_openai_functions_agent(_llm, tools, prompt)
+    agent_executor = AgentExecutor(agent=agent_runnable, tools=tools, verbose=True)
+    result = agent_executor.invoke(
+        {"question": state["question"], "chat_history": state.get("chat_history", [])}
+    )
+    answer = result["output"]
     print(f"Final Answer: {answer}")
     return {"answer": answer}
 
